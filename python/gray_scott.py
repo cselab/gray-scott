@@ -22,8 +22,8 @@ class GrayScott:
                  *,
                  F=0.04,
                  kappa=0.06,
-                 Da=2.0e-5,
-                 Ds=1.0e-5,
+                 Du=2.0e-5,
+                 Dv=1.0e-5,
                  x0=-1,
                  x1=1,
                  N=256,
@@ -39,8 +39,8 @@ class GrayScott:
         Arguments
             F: parameter F in governing equations
             kappa: parameter kappa (k) in governing equations
-            Da: diffusivity of species A
-            Ds: diffusivity of species S
+            Du: diffusivity of species U
+            Dv: diffusivity of species V
             x0: left domain coordinate
             x1: right domain coordinate
             N: number of nodes in x and y
@@ -71,9 +71,9 @@ class GrayScott:
         dx = L / N
 
         # intermediates
-        self.fa = Da / dx**2
-        self.fs = Ds / dx**2
-        self.dt = Fo * dx**2 / (4*max(Da, Ds))
+        self.fa = Du / dx**2
+        self.fs = Dv / dx**2
+        self.dt = Fo * dx**2 / (4*max(Du, Dv))
 
         # nodal grid (+ghosts)
         x = np.linspace(x0-dx, x1+dx, Nnodes+2)
@@ -81,11 +81,11 @@ class GrayScott:
         self.x, self.y = np.meshgrid(x, y)
 
         # initial condition
-        self.a = np.zeros((len(x), len(y)))
-        self.s = np.zeros((len(x), len(y)))
+        self.u = np.zeros((len(x), len(y)))
+        self.v = np.zeros((len(x), len(y)))
         if self.second_order:
-            self.a_tmp = np.zeros((len(x), len(y)))
-            self.s_tmp = np.zeros((len(x), len(y)))
+            self.u_tmp = np.zeros((len(x), len(y)))
+            self.v_tmp = np.zeros((len(x), len(y)))
 
         if initial_condition == 'trefethen':
             self._trefethen_IC()
@@ -96,8 +96,8 @@ class GrayScott:
                 f"Unknown initial condition type: `{initial_condition}`")
 
         # populate ghost cells
-        self.update_ghosts(self.a)
-        self.update_ghosts(self.s)
+        self.update_ghosts(self.u)
+        self.update_ghosts(self.v)
 
     def integrate(self, t0, t1, *, dump_freq=100, report=50):
         """
@@ -141,8 +141,8 @@ class GrayScott:
             self._euler()
 
         # update ghost cells
-        self.update_ghosts(self.a)
-        self.update_ghosts(self.s)
+        self.update_ghosts(self.u)
+        self.update_ghosts(self.v)
 
         return time + self.dt
 
@@ -152,13 +152,13 @@ class GrayScott:
         1st order Euler step
         """
         # internal domain
-        a_view = self.a[1:-1, 1:-1]
-        s_view = self.s[1:-1, 1:-1]
+        u_view = self.u[1:-1, 1:-1]
+        v_view = self.v[1:-1, 1:-1]
 
         # advance state (Euler step)
-        as2 = a_view * np.power(s_view, 2)
-        a_view += self.dt * (self.fa * self.laplacian(self.a) - as2 + self.F * (1 - a_view))
-        s_view += self.dt * (self.fs * self.laplacian(self.s) + as2 - (self.F + self.kappa) * s_view)
+        uv2 = u_view * np.power(v_view, 2)
+        u_view += self.dt * (self.fa * self.laplacian(self.u) - uv2 + self.F * (1 - u_view))
+        v_view += self.dt * (self.fs * self.laplacian(self.v) + uv2 - (self.F + self.kappa) * v_view)
 
 
     def _heun(self):
@@ -166,26 +166,26 @@ class GrayScott:
         2nd order Heun's method
         """
         # internal domain
-        a_view = self.a[1:-1, 1:-1]
-        s_view = self.s[1:-1, 1:-1]
-        a_vtmp = self.a_tmp[1:-1, 1:-1]
-        s_vtmp = self.s_tmp[1:-1, 1:-1]
+        u_view = self.u[1:-1, 1:-1]
+        v_view = self.v[1:-1, 1:-1]
+        u_vtmp = self.u_tmp[1:-1, 1:-1]
+        v_vtmp = self.v_tmp[1:-1, 1:-1]
 
         # 1st stage
-        as2 = a_view * s_view**2
-        a_rhs1 = self.fa * self.laplacian(self.a) - as2 + self.F * (1 - a_view)
-        s_rhs1 = self.fs * self.laplacian(self.s) + as2 - (self.F + self.kappa) * s_view
-        a_vtmp = a_view + self.dt * a_rhs1
-        s_vtmp = s_view + self.dt * s_rhs1
-        self.update_ghosts(self.a_tmp)
-        self.update_ghosts(self.s_tmp)
+        uv2 = u_view * v_view**2
+        u_rhs1 = self.fa * self.laplacian(self.u) - uv2 + self.F * (1 - u_view)
+        v_rhs1 = self.fs * self.laplacian(self.v) + uv2 - (self.F + self.kappa) * v_view
+        u_vtmp = u_view + self.dt * u_rhs1
+        v_vtmp = v_view + self.dt * v_rhs1
+        self.update_ghosts(self.u_tmp)
+        self.update_ghosts(self.v_tmp)
 
         # 2nd stage
-        as2 = a_vtmp * s_vtmp**2
-        a_rhs2 = self.fa * self.laplacian(self.a_tmp) - as2 + self.F * (1 - a_vtmp)
-        s_rhs2 = self.fs * self.laplacian(self.s_tmp) + as2 - (self.F + self.kappa) * s_vtmp
-        a_view += 0.5 * self.dt * (a_rhs1 + a_rhs2)
-        s_view += 0.5 * self.dt * (s_rhs1 + s_rhs2)
+        uv2 = u_vtmp * v_vtmp**2
+        u_rhs2 = self.fa * self.laplacian(self.u_tmp) - uv2 + self.F * (1 - u_vtmp)
+        v_rhs2 = self.fs * self.laplacian(self.v_tmp) + uv2 - (self.F + self.kappa) * v_vtmp
+        u_view += 0.5 * self.dt * (u_rhs1 + u_rhs2)
+        v_view += 0.5 * self.dt * (v_rhs1 + v_rhs2)
 
 
     def _dump(self, step, time, *, both=False):
@@ -200,15 +200,15 @@ class GrayScott:
             os.makedirs(self.outdir)
         x = self.x[1:-1, 1:-1]
         y = self.y[1:-1, 1:-1]
-        a = self.a[1:-1, 1:-1]
-        s = self.s[1:-1, 1:-1]
+        U = self.u[1:-1, 1:-1]
+        V = self.v[1:-1, 1:-1]
         if both:
             fig, ax = plt.subplots(1, 2, figsize=(16, 8))
-            cs0 = ax[0].contourf(x, y, a, levels=50, cmap='jet')
-            cs1 = ax[1].contourf(x, y, s, levels=50, cmap='jet')
+            cs0 = ax[0].contourf(x, y, U, levels=50, cmap='jet')
+            cs1 = ax[1].contourf(x, y, V, levels=50, cmap='jet')
             fig.suptitle(f"time = {time:e}")
             lim = (self.x0, self.x1)
-            species = ("A", "S")
+            species = ("U", "V")
             for a, l in zip(ax, species):
                 a.set_title(f"Species {l}")
                 a.set_xlabel("x")
@@ -216,12 +216,12 @@ class GrayScott:
                 a.set_xlim(lim)
                 a.set_ylim(lim)
                 a.set_aspect('equal')
-        else: # only species S
+        else: # only species V
             fig, ax = plt.subplots(1, 1, figsize=(6, 6))
-            ax.contourf(x, y, s, levels=50, cmap='jet')
+            ax.contourf(x, y, V, levels=50, cmap='jet')
             fig.suptitle(f"time = {time:e}")
             lim = (self.x0, self.x1)
-            ax.set_title(f"Species S")
+            ax.set_title(f"Species V")
             ax.set_xlabel("x")
             ax.set_ylabel("y")
             ax.set_xlim(lim)
@@ -243,9 +243,9 @@ class GrayScott:
         """
         Random initial condition
         """
-        dim = self.a.shape
-        self.a = np.ones(dim) / 2 + 0.5 * np.random.uniform(0, 1, dim)
-        self.s = np.ones(dim) / 4 + 0.5 * np.random.uniform(0, 1, dim)
+        dim = self.u.shape
+        self.u = np.ones(dim) / 2 + 0.5 * np.random.uniform(0, 1, dim)
+        self.v = np.ones(dim) / 4 + 0.5 * np.random.uniform(0, 1, dim)
 
     def _trefethen_IC(self):
         """
@@ -254,8 +254,8 @@ class GrayScott:
         """
         x = self.x[1:-1, 1:-1]
         y = self.y[1:-1, 1:-1]
-        self.a[1:-1, 1:-1] = 1 - np.exp(-80*((x+0.05)**2 + (y+0.05)**2))
-        self.s[1:-1, 1:-1] = np.exp(-80*((x-0.05)**2 + (y-0.05)**2))
+        self.u[1:-1, 1:-1] = 1 - np.exp(-80*((x+0.05)**2 + (y+0.05)**2))
+        self.v[1:-1, 1:-1] = np.exp(-80*((x-0.05)**2 + (y-0.05)**2))
 
 
     @staticmethod
