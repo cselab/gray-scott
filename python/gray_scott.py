@@ -1,60 +1,119 @@
+# File       : gray_scott.py
+# Created    : Sat Jan 30 2021 05:12:47 PM (+0100)
+# Description: Gray-Scott reaction-diffusion
+# Copyright 2021 ETH Zurich. All Rights Reserved.
 import numpy as np
 import matplotlib.pyplot as plt
 
 
-def initial_condition(Nx, Ny):
-  a = np.ones((Nx,Ny))/2 + 0.5*np.random.uniform(0,1,(Nx,Ny));
-  s = np.ones((Nx,Ny))/4 + 0.5*np.random.uniform(0,1,(Nx,Ny));
-  return a, s
+class gray_scott:
+    """
+    Gray-Scott reaction-diffusion system.
+    http://mrob.com/pub/comp/xmorphia/index.html
 
-def update_ghosts(v):
-    v[0,:] = v[-2,:];
-    v[:,0] = v[:,-2];
-    v[-1,:] = v[1,:];
-    v[:,-1] = v[:,1];
+    Reactions:
+        A + 2S → 3S
+        S → P (P is an inert product)
+    """
 
-def laplacian(a):
-  return a[2:,1:-1] + a[1:-1,2:] + a[0:-2,1:-1]  + a[1:-1,0:-2] - 4*a[1:-1,1:-1]
+    def __init__(self,
+                 *,
+                 F=0.04,
+                 kappa=0.06,
+                 Da=1.0e-2,
+                 Ds=5.0e-3,
+                 L=5.5,
+                 N=256,
+                 Fo=0.9,
+                 initial_condition='random'):
+        """
+        Constructor
 
+        Arguments
+            F: parameter F in governing equations
+            kappa: parameter kappa (k) in governing equations
+            Da: diffusivity of species A
+            Ds: diffusivity of species S
+            L: domain extent in x and y (square)
+            N: number of cells in x and y
+            Fo: Fourier number (<= 1)
 
-class grey_scott:
+            initial_condition: type of initial condition to be used
+        """
+        # parameter
+        self.F = F
+        self.kappa = kappa
+        self.Da = Da
+        self.Ds = Ds
+        self.L = L
+        self.N = N  # cells
+        self.V = self.N + 1  # nodes
 
-  def __init__(self):
-    self.F= 0.04;
-    self.kappa = 0.06;
-    self.D_a = 1e-2;
-    self.D_s = 5e-3;
+        # grid spacing
+        dx = self.L / self.N
 
-    self.fq = 0.90;
+        # intermediates
+        self.fa = self.Da / dx**2
+        self.fs = self.Ds / dx**2
+        self.dt = Fo * dx**2 / (4*max(self.Da, self.Ds))
 
-    self.Lx = 5.50;
-    self.Ly = 5.50;
-    self.Nx = 257;
-    self.Ny = 257;
-    dx = self.Lx/(self.Nx-1);
-    dy = self.Ly/(self.Ny-1);
+        # nodal grid
+        x = np.linspace(0, self.L, self.V)
+        y = np.linspace(0, self.L, self.V)
+        self.x, self.y = np.meshgrid(x, y)
 
-    self.fa = self.D_a/dx**2;
-    self.fs = self.D_s/dx**2;
-    self.dt = self.fq/(4.0*self.fa);
+        # initial condition
+        self.a = np.zeros((self.V, self.V))
+        self.s = np.zeros((self.V, self.V))
 
-    x = np.linspace(0, self.Lx, self.Nx)
-    y = np.linspace(0, self.Ly, self.Ny)
-    self.x, self.y = np.meshgrid(x, y)
+        if initial_condition == 'random':
+            self._random_IC()
+        else:
+            raise RuntimeError(
+                f"Unknown initial condition type: `{initial_condition}`")
 
+        # populate ghost cells
+        self.update_ghosts(self.a)
+        self.update_ghosts(self.s)
 
-    [self.a,self.s] = initial_condition(self.Nx,self.Ny);
+    def update(self):
+        """
+        Perform Euler integration step
+        """
+        # internal domain
+        a_view = self.a[1:-1, 1:-1]
+        s_view = self.s[1:-1, 1:-1]
 
-    update_ghosts(self.a);
-    update_ghosts(self.s);
+        # advance state (Euler step)
+        as2 = a_view * np.power(s_view, 2)
+        a_view += self.dt * (self.fa * self.laplacian(self.a) - as2 + self.F * (1 - a_view))
+        s_view += self.dt * (self.fs * self.laplacian(self.s) + as2 - (self.F + self.kappa) * s_view)
 
-  def update(self):
-    as2 = self.a[1:-1,1:-1]*np.power(self.s[1:-1,1:-1],2)
+        # update ghost cells
+        self.update_ghosts(self.a)
+        self.update_ghosts(self.s)
 
-    self.a[1:-1,1:-1] += self.dt*( self.fa*laplacian(self.a) - as2 + self.F*(1-self.a[1:-1,1:-1]) )
-    self.s[1:-1,1:-1] += self.dt*( self.fs*laplacian(self.s) + as2 - (self.F+self.kappa)*self.s[1:-1,1:-1] )
+    def _random_IC(self):
+        """
+        Random initial condition
+        """
+        dim = self.a.shape
+        assert dim == self.s.shape
+        self.a = np.ones(dim) / 2 + 0.5 * np.random.uniform(0, 1, dim)
+        self.s = np.ones(dim) / 4 + 0.5 * np.random.uniform(0, 1, dim)
 
-    update_ghosts(self.a);
-    update_ghosts(self.s);
+    @staticmethod
+    def laplacian(a):
+        """
+        Discretization of Laplacian operator
+        """
+        return a[2:, 1:-1] + a[1:-1, 2:] + a[0:-2, 1:-1] + a[1:-1, 0:-2] - 4 * a[1:-1, 1:-1]
 
-
+    @staticmethod
+    def update_ghosts(v):
+        """
+        """
+        v[0, :] = v[-2, :]
+        v[:, 0] = v[:, -2]
+        v[-1, :] = v[1, :]
+        v[:, -1] = v[:, 1]
