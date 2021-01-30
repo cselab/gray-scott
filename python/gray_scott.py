@@ -29,6 +29,7 @@ class GrayScott:
                  N=256,
                  Fo=0.8,
                  initial_condition='trefethen',
+                 second_order=False,
                  movie=False,
                  outdir='.'):
         """
@@ -46,6 +47,7 @@ class GrayScott:
             Fo: Fourier number (<= 1)
 
             initial_condition: type of initial condition to be used
+            second_order: use Heun's method (2nd-order Runge-Kutta)
             movie: create a movie
             outdir: output directory
         """
@@ -53,7 +55,7 @@ class GrayScott:
         self.F = F
         self.kappa = kappa
 
-        Nnodes = N + 2  # nodes (1+1 ghosts)
+        Nnodes = N + 1
         self.Fo = Fo
         self.x0 = x0
         self.x1 = x1
@@ -62,24 +64,28 @@ class GrayScott:
         self.movie = movie
         self.outdir = outdir
         self.dump_count = 0
+        self.second_order = second_order
 
         # grid spacing
         L = x1 - x0
-        dx = L / (N-1)
+        dx = L / N
 
         # intermediates
         self.fa = Da / dx**2
         self.fs = Ds / dx**2
         self.dt = Fo * dx**2 / (4*max(Da, Ds))
 
-        # nodal grid
-        x = np.linspace(x0-dx, x1+dx, Nnodes)
-        y = np.linspace(x0-dx, x1+dx, Nnodes)
+        # nodal grid (+ghosts)
+        x = np.linspace(x0-dx, x1+dx, Nnodes+2)
+        y = np.linspace(x0-dx, x1+dx, Nnodes+2)
         self.x, self.y = np.meshgrid(x, y)
 
         # initial condition
-        self.a = np.zeros((Nnodes, Nnodes))
-        self.s = np.zeros((Nnodes, Nnodes))
+        self.a = np.zeros((len(x), len(y)))
+        self.s = np.zeros((len(x), len(y)))
+        if self.second_order:
+            self.a_tmp = np.zeros((len(x), len(y)))
+            self.s_tmp = np.zeros((len(x), len(y)))
 
         if initial_condition == 'trefethen':
             self._trefethen_IC()
@@ -93,19 +99,20 @@ class GrayScott:
         self.update_ghosts(self.a)
         self.update_ghosts(self.s)
 
-    def integrate(self, t0, t1, *, dump=100, report=50):
+    def integrate(self, t0, t1, *, dump_freq=100, report=50):
         """
         Integrate system.
 
         Arguments:
             t0: start time
             r1: end time
-            dump: dump frequency in steps
+            dump_freq: dump frequency in steps
+            report: stdout report frequency
         """
         t = t0
         s = 0
         while t < t1:
-            if s % dump == 0:
+            if s % dump_freq == 0:
                 self._dump(s, t)
             if s % report == 0:
                 print(f"step={s}; time={t:e}")
@@ -120,13 +127,29 @@ class GrayScott:
 
     def update(self, *, time=0):
         """
-        Perform Euler integration step
+        Perform time integration step
 
         Arguments:
             time: current time
 
         Returns:
             Time after integration
+        """
+        if self.second_order:
+            self._heun()
+        else:
+            self._euler()
+
+        # update ghost cells
+        self.update_ghosts(self.a)
+        self.update_ghosts(self.s)
+
+        return time + self.dt
+
+
+    def _euler(self):
+        """
+        1st order Euler step
         """
         # internal domain
         a_view = self.a[1:-1, 1:-1]
@@ -137,11 +160,33 @@ class GrayScott:
         a_view += self.dt * (self.fa * self.laplacian(self.a) - as2 + self.F * (1 - a_view))
         s_view += self.dt * (self.fs * self.laplacian(self.s) + as2 - (self.F + self.kappa) * s_view)
 
-        # update ghost cells
-        self.update_ghosts(self.a)
-        self.update_ghosts(self.s)
 
-        return time + self.dt
+    def _heun(self):
+        """
+        2nd order Heun's method
+        """
+        # internal domain
+        a_view = self.a[1:-1, 1:-1]
+        s_view = self.s[1:-1, 1:-1]
+        a_vtmp = self.a_tmp[1:-1, 1:-1]
+        s_vtmp = self.s_tmp[1:-1, 1:-1]
+
+        # 1st stage
+        as2 = a_view * s_view**2
+        a_rhs1 = self.fa * self.laplacian(self.a) - as2 + self.F * (1 - a_view)
+        s_rhs1 = self.fs * self.laplacian(self.s) + as2 - (self.F + self.kappa) * s_view
+        a_vtmp = a_view + self.dt * a_rhs1
+        s_vtmp = s_view + self.dt * s_rhs1
+        self.update_ghosts(self.a_tmp)
+        self.update_ghosts(self.s_tmp)
+
+        # 2nd stage
+        as2 = a_vtmp * s_vtmp**2
+        a_rhs2 = self.fa * self.laplacian(self.a_tmp) - as2 + self.F * (1 - a_vtmp)
+        s_rhs2 = self.fs * self.laplacian(self.s_tmp) + as2 - (self.F + self.kappa) * s_vtmp
+        a_view += 0.5 * self.dt * (a_rhs1 + a_rhs2)
+        s_view += 0.5 * self.dt * (s_rhs1 + s_rhs2)
+
 
     def _dump(self, step, time, *, both=False):
         """
@@ -209,8 +254,8 @@ class GrayScott:
         """
         x = self.x[1:-1, 1:-1]
         y = self.y[1:-1, 1:-1]
-        self.a[1:-1, 1:-1] = 1 - np.exp(-80*((x+0.05)**2 + (y+0.02)**2))
-        self.s[1:-1, 1:-1] = np.exp(-80*((x-0.05)**2 + (y-0.02)**2))
+        self.a[1:-1, 1:-1] = 1 - np.exp(-80*((x+0.05)**2 + (y+0.05)**2))
+        self.s[1:-1, 1:-1] = np.exp(-80*((x-0.05)**2 + (y-0.05)**2))
 
 
     @staticmethod
