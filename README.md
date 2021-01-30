@@ -2,7 +2,7 @@
 
 ## Governing equations
 
-![reaction_diffusion](./gray-scott-formula.jpg "Reaction-Diffusion system")
+![](./gray-scott-formula.jpg "Reaction-Diffusion system")
 
 
 ## Rolls and spots
@@ -17,7 +17,7 @@ parameters for this solution are
 * `F = 0.04`
 * `kappa = 0.06`
 
-![rolls_pattern](./rolls.png "Rolls pattern")
+![](./rolls.png "Rolls pattern")
 
 By slightly perturbing `F` a completely different solution is found, this time a
 "spot" pattern is observed.  The parameters for this simulation are
@@ -25,7 +25,14 @@ By slightly perturbing `F` a completely different solution is found, this time a
 * `F = 0.025`
 * `kappa = 0.06`
 
-![spots_pattern](./spots.png "Spots pattern")
+![](./spots.png "Spots pattern")
+
+To reproduce these images, run the command
+
+```
+./run_simulation.py --demo
+```
+
 
 
 ## Running the code
@@ -55,13 +62,6 @@ Running a simulation for parameter `F=0.02` and `k=0.06` is achieved by
 where in addition the output is written to a directory `sim_F0.02_k0.06` in the
 current folder.  If the `--outdir` option is omitted then output is written into
 the current directory.
-
-To reproduce these images, run the command
-
-```
-./run_simulation.py --demo
-```
-
 
 
 ### Generating movies from output frames
