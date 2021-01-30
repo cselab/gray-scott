@@ -19,7 +19,7 @@ def parse_args():
     parser.add_argument('-T', '--end_time', default=3500, type=float, help='Final time')
     parser.add_argument('-d', '--dump_freq', default=100, type=int, help='Dump frequency (integration steps)')
     parser.add_argument('--demo', action='store_true', help='Run demo (https://www.chebfun.org/examples/pde/GrayScott.html)')
-    parser.add_argument('--movie', action='store_true', help='Create a movie')
+    parser.add_argument('--movie', action='store_true', help='Create a movie (requires ffmpeg)')
     parser.add_argument('--outdir', default='.', type=str, help='Output directory')
     return parser.parse_known_args()
 
