@@ -8,7 +8,8 @@
 ## Rolls and spots
 
 A nice demo for the sensitivity of the parameters `F` and `kappa` is given by
-Prof. Trefethen [here](https://www.chebfun.org/examples/pde/GrayScott.html).
+Prof. Trefethen ([click
+here](https://www.chebfun.org/examples/pde/GrayScott.html)).
 
 The first parameter set generates a beautiful pattern with "rolls".  The
 parameters for this solution are
