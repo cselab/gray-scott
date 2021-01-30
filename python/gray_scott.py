@@ -43,28 +43,25 @@ class gray_scott:
         # parameter
         self.F = F
         self.kappa = kappa
-        self.Da = Da
-        self.Ds = Ds
-        self.L = L
-        self.N = N  # cells
-        self.V = self.N + 1  # nodes
+
+        Nnodes = N + 1  # nodes
 
         # grid spacing
-        dx = self.L / self.N
+        dx = L / N
 
         # intermediates
-        self.fa = self.Da / dx**2
-        self.fs = self.Ds / dx**2
-        self.dt = Fo * dx**2 / (4*max(self.Da, self.Ds))
+        self.fa = Da / dx**2
+        self.fs = Ds / dx**2
+        self.dt = Fo * dx**2 / (4*max(Da, Ds))
 
         # nodal grid
-        x = np.linspace(0, self.L, self.V)
-        y = np.linspace(0, self.L, self.V)
+        x = np.linspace(0, L, Nnodes)
+        y = np.linspace(0, L, Nnodes)
         self.x, self.y = np.meshgrid(x, y)
 
         # initial condition
-        self.a = np.zeros((self.V, self.V))
-        self.s = np.zeros((self.V, self.V))
+        self.a = np.zeros((Nnodes, Nnodes))
+        self.s = np.zeros((Nnodes, Nnodes))
 
         if initial_condition == 'random':
             self._random_IC()
@@ -76,9 +73,15 @@ class gray_scott:
         self.update_ghosts(self.a)
         self.update_ghosts(self.s)
 
-    def update(self):
+    def update(self, *, time=0):
         """
         Perform Euler integration step
+
+        Arguments:
+            time: current time
+
+        Returns:
+            Time after integration
         """
         # internal domain
         a_view = self.a[1:-1, 1:-1]
@@ -93,6 +96,8 @@ class gray_scott:
         self.update_ghosts(self.a)
         self.update_ghosts(self.s)
 
+        return time + self.dt
+
     def _random_IC(self):
         """
         Random initial condition
@@ -106,12 +111,19 @@ class gray_scott:
     def laplacian(a):
         """
         Discretization of Laplacian operator
+
+        Arguments:
+            a: 2D array
         """
         return a[2:, 1:-1] + a[1:-1, 2:] + a[0:-2, 1:-1] + a[1:-1, 0:-2] - 4 * a[1:-1, 1:-1]
 
     @staticmethod
     def update_ghosts(v):
         """
+        Apply periodic boundary conditions
+
+        Arguments:
+            v: 2D array
         """
         v[0, :] = v[-2, :]
         v[:, 0] = v[:, -2]
