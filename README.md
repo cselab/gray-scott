@@ -56,6 +56,13 @@ where in addition the output is written to a directory `sim_F0.02_k0.06` in the
 current folder.  If the `--outdir` option is omitted then output is written into
 the current directory.
 
+To reproduce these images, run the command
+
+```
+./run_simulation.py --demo
+```
+
+
 
 ### Generating movies from output frames
 
