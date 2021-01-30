@@ -3,9 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 
-from grey_scott import grey_scott
+from gray_scott import gray_scott
 
-gs = grey_scott()
+gs = gray_scott()
 
 T_frames = 100
 T_between_frames = 10
@@ -15,29 +15,29 @@ A[0,:,:] = gs.a
 print('Solve the Gray-Scott model...\n')
 
 for k in range(T_frames):
-  for l in range(T_between_frames):
-    gs.update()
-  A[k+1,:,:] = gs.a
+    for l in range(T_between_frames):
+        gs.update()
+    A[k+1,:,:] = gs.a
 
 print('Finished solving the Gray-Scott model...\n')
 
 
 
 class video_plot(object):
-  def __init__(self, ax, skip_frames=10):
-    self.ax = ax
-    self.cntr = []
+    def __init__(self, ax, skip_frames=10):
+        self.ax = ax
+        self.cntr = []
 
-  def __call__(self, i):
-    try:
-      for c in self.cntr.collections:
-        c.remove()
-    except:
-      pass
+    def __call__(self, i):
+        try:
+            for c in self.cntr.collections:
+                c.remove()
+        except:
+            pass
 
-    self.cntr = self.ax.contourf( gs.x, gs.y, A[i,:,:], levels=50, cmap=plt.cm.gray )
-    self.ax.set_title( str(i*T_between_frames) )
-    return self.cntr
+        self.cntr = self.ax.contourf( gs.x, gs.y, A[i,:,:], levels=50, cmap=plt.cm.gray )
+        self.ax.set_title( str(i*T_between_frames) )
+        return self.cntr
 
 
 fig, ax = plt.subplots(1, 1, figsize=(10,10))
