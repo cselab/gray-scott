@@ -14,8 +14,8 @@ class GrayScott:
     https://www.lanevol.org/resources/gray-scott
 
     Reactions:
-        A + 2S → 3S
-        S → P (P is an inert product)
+        U + 2V → 3V
+        V → P (P is an inert product)
     """
 
     def __init__(self,
@@ -195,6 +195,7 @@ class GrayScott:
         Arguments:
             step: step ID
             time: current time
+            both: if true, dump contours for both species U and V
         """
         if not os.path.exists(self.outdir):
             os.makedirs(self.outdir)
@@ -233,8 +234,8 @@ class GrayScott:
 
 
     def _render_frames(self):
-        cmd = ['ffmpeg', '-framerate', '24', '-i', 
-                os.path.join(self.outdir, 'frame_%06d.png'), '-b:v', '90M', 
+        cmd = ['ffmpeg', '-framerate', '24', '-i',
+                os.path.join(self.outdir, 'frame_%06d.png'), '-b:v', '90M',
                 '-vcodec', 'mpeg4', os.path.join(self.outdir, 'movie.mp4')]
         sp.run(cmd)
 
